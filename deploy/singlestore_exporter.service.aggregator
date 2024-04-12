@@ -1,0 +1,19 @@
+[Unit]
+Description=SingleStore Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=memsql
+Group=memsql
+Type=simple
+Environment='DATA_SOURCE_NAME={USER}:{PASSWORD}@tcp(localhost:3306)/'
+ExecStart=/opt/exporters/bin/singlestore_exporter \
+  --log.log_path=/opt/exporters/logs/singlestore_exporter.log \
+  --collect.slow_query=true \
+  --collect.slow_query.threshold=10 \
+  --collect.slow_query.log_path=/opt/exporters/logs/singlestore_exporter_slow_query.log \
+  --collect.replication_status=false
+
+[Install]
+WantedBy=multi-user.target

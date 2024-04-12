@@ -1,0 +1,14 @@
+[Unit]
+Description=SingleStore Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=memsql
+Group=memsql
+Type=simple
+ExecStart=/opt/exporters/bin/singlestore_exporter \
+  --log.log_path=/opt/exporters/logs/singlestore_exporter.log
+
+[Install]
+WantedBy=multi-user.target
