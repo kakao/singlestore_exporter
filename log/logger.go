@@ -69,6 +69,7 @@ func NewConsoleLogger(formatJSON bool, level logrus.Level) *LogrusLogger {
 
 func NewFileLogger(path string, formatJSON bool, level logrus.Level) *LogrusLogger {
 	logger := logrus.New()
+	logger.SetLevel(level)
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		if file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644); err != nil {

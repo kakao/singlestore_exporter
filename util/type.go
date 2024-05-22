@@ -32,3 +32,8 @@ func NullStringToString(nullString sql.NullString, defaultValue string) string {
 		return defaultValue
 	}
 }
+
+func StringToFloat64(s string) float64 {
+	f, _ := strconv.ParseFloat(s, 64)
+	return f
+}

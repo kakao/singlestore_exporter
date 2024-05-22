@@ -8,6 +8,7 @@ User=memsql
 Group=memsql
 Type=simple
 ExecStart=/opt/exporters/bin/singlestore_exporter \
+  --collect.data_disk_usage=true \
   --log.log_path=/opt/exporters/logs/singlestore_exporter.log
 
 [Install]

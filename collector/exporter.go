@@ -35,6 +35,7 @@ func New(
 	flagSlowQuery bool,
 	flagSlowQueryThreshold int,
 	flagReplicationStatus bool,
+	flagDataDiskUsage bool,
 ) *Exporter {
 	scrapers := []Scraper{
 		&ScrapeNodes{},
@@ -49,6 +50,9 @@ func New(
 		if flagReplicationStatus {
 			scrapers = append(scrapers, &ScrapeReplicationStatus{})
 		}
+	}
+	if flagDataDiskUsage {
+		scrapers = append(scrapers, &ScrapeDataDiskUsage{})
 	}
 
 	return &Exporter{
