@@ -17,6 +17,13 @@ const (
 )
 
 var (
+	exporterVersionDesc = prometheus.NewDesc(
+		"singlestore_exporter_version",
+		"singlestore_exporter version",
+		[]string{"version"},
+		nil,
+	)
+
 	dbConnectionSuccessfulDesc = prometheus.NewDesc(
 		"db_connection_successful",
 		"is db connection successful? (for aggregator)",
@@ -26,11 +33,13 @@ var (
 )
 
 type Exporter struct {
+	version  string
 	dsn      string
 	scrapers []Scraper
 }
 
 func New(
+	version string,
 	dsn string,
 	flagSlowQuery bool,
 	flagSlowQueryThreshold int,
@@ -56,6 +65,7 @@ func New(
 	}
 
 	return &Exporter{
+		version,
 		dsn,
 		scrapers,
 	}
@@ -72,6 +82,8 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 func (e *Exporter) scrape(dsn string, ch chan<- prometheus.Metric) {
 	var db *sqlx.DB
 	var err error
+
+	ch <- prometheus.MustNewConstMetric(exporterVersionDesc, prometheus.GaugeValue, 1, e.version)
 
 	if dsn != "" {
 		db, err = e.conn(dsn + "information_schema?parseTime=true")

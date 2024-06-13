@@ -59,7 +59,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, newHandler(dsn, *flagSlowQueryPtr, *flagSlowQueryThresholdPtr, *flagReplicationStatusPtr, *flagDataDiskUsagePtr)))
+	mux.Handle("/metrics", promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, newHandler(Version, dsn, *flagSlowQueryPtr, *flagSlowQueryThresholdPtr, *flagReplicationStatusPtr, *flagDataDiskUsagePtr)))
 
 	// pprof
 	if *flagPprof {
@@ -77,6 +77,7 @@ func main() {
 }
 
 func newHandler(
+	version string,
 	dsn string,
 	flagSlowQuery bool,
 	flagSlowQueryThreshold int,
@@ -86,7 +87,7 @@ func newHandler(
 	return func(w http.ResponseWriter, r *http.Request) {
 		registry := prometheus.NewRegistry()
 
-		registry.MustRegister(collector.New(dsn, flagSlowQuery, flagSlowQueryThreshold, flagReplicationStatus, flagDataDiskUsage))
+		registry.MustRegister(collector.New(version, dsn, flagSlowQuery, flagSlowQueryThreshold, flagReplicationStatus, flagDataDiskUsage))
 
 		gatherers := prometheus.Gatherers{
 			prometheus.DefaultGatherer,

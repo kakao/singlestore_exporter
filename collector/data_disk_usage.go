@@ -10,6 +10,23 @@ import (
 	"sync"
 )
 
+type MemsqlNode struct {
+	MemsqlId          string `json:"memsqlId"`
+	Role              string `json:"role"`
+	Port              int    `json:"port"`
+	ProcessState      string `json:"processState"`
+	IsConnectable     bool   `json:"isConnectable"`
+	Version           string `json:"version"`
+	RecoveryState     string `json:"recoveryState"`
+	AvailabilityGroup int    `json:"availabilityGroup"`
+	BindAddress       string `json:"bindAddress"`
+	NodeID            string `json:"nodeID"`
+}
+
+type MemsqlNodes struct {
+	Nodes []MemsqlNode `json:"nodes"`
+}
+
 type DataDiskUsage struct {
 	NodeID        string `json:"NODE_ID"`
 	DatabaseName  string `json:"DATABASE_NAME"`
@@ -34,20 +51,42 @@ func ScrapeDataDiskUsages() {
 	dataDiskUsagesMu.Lock()
 	defer dataDiskUsagesMu.Unlock()
 
-	out, err := exec.Command("/usr/bin/memsqlctl", "query", "--sql", infoSchemaDataDiskUsageQuery, "--json").Output()
+	// get memsql nodes first
+	out, err := exec.Command("/usr/bin/memsqlctl", "list-nodes", "--json").Output()
 	if err != nil {
-		log.ErrorLogger.Errorf("scraping command failed: command='memsqlctl query --sql '%s' --json' out=%s error=%v", infoSchemaDataDiskUsageQuery, string(out), err)
+		log.ErrorLogger.Errorf("scraping command failed: command='memsqlctl list-nodes --json' out=%s error=%v", string(out), err)
 		dataDiskUsages = nil
 		return
 	}
 
-	var rows DataDiskUsageRows
-	if err := json.Unmarshal(out, &rows); err != nil {
-		log.ErrorLogger.Errorf("unmarshal output failed: command='memsqlctl query --sql '%s' --json' out=%s error=%v", infoSchemaDataDiskUsageQuery, string(out), err)
+	var memsqlNodes MemsqlNodes
+	if err := json.Unmarshal(out, &memsqlNodes); err != nil {
+		log.ErrorLogger.Errorf("unmarshal output failed: command='memsqlctl list-nodes --json' out=%s error=%v", string(out), err)
 		dataDiskUsages = nil
+		return
 	}
 
-	dataDiskUsages = rows.Rows
+	// get data disk usage per node
+	totalRows := make([]DataDiskUsage, 0)
+	for _, node := range memsqlNodes.Nodes {
+		out, err = exec.Command("/usr/bin/memsqlctl", "query", "--memsql-id", node.MemsqlId, "--sql", infoSchemaDataDiskUsageQuery, "--json").Output()
+		if err != nil {
+			log.ErrorLogger.Errorf("scraping command failed: command='memsqlctl query --sql '%s' --json' out=%s error=%v", infoSchemaDataDiskUsageQuery, string(out), err)
+			dataDiskUsages = nil
+			return
+		}
+
+		var rows DataDiskUsageRows
+		if err := json.Unmarshal(out, &rows); err != nil {
+			log.ErrorLogger.Errorf("unmarshal output failed: command='memsqlctl query --sql '%s' --json' out=%s error=%v", infoSchemaDataDiskUsageQuery, string(out), err)
+			dataDiskUsages = nil
+			return
+		}
+
+		totalRows = append(totalRows, rows.Rows...)
+	}
+
+	dataDiskUsages = totalRows
 }
 
 const (
