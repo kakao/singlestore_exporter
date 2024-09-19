@@ -31,18 +31,20 @@ For systemd integration, refer to the example service files under the deploy/ fo
 
 ## Flags
 
-| flag                                    | description                                          | default                       |
-|-----------------------------------------|------------------------------------------------------|-------------------------------|
-| collect.slow_query                      | Collect slow query metrics                           | false                         |
-| collect.slow_query.threshold            | Slow query threshold in seconds                      | 10                            |
-| collect.slow_query.log_path             | Path to slow query log                               | "" (logs only to the console) |
-| collect.replication_status              | Collect replication status metrics                   | false                         |
-| collect.data_disk_usage                 | Collect disk usage per database                      | false                         |
-| collect.data_disk_usage.scrape_interval | Collect interval of disk usage per database          | 30                            |
-| net.listen_address                      | Address to listen on for web interface and telemetry | 0.0.0.0:9105                  |
-| log.log_path                            | Log path                                             | "" (logs only to the console) |
-| log.level                               | Log level (info, warn, error, fatal, panic)          | info                          |
-| debug.pprof                             | Enable pprof                                         | false                         |
+| flag                                       | description                                          | default                       |
+|--------------------------------------------|------------------------------------------------------|-------------------------------|
+| collect.slow_query                         | Collect slow query metrics                           | false                         |
+| collect.slow_query.threshold               | Slow query threshold in seconds                      | 10                            |
+| collect.slow_query.log_path                | Path to slow query log                               | "" (logs only to the console) |
+| collect.slow_query.exception.hosts         | Hosts to exclude from slow query metrics             | ""                            |
+| collect.slow_query.exception.info.patterns | Patterns of query to exclude from slow query metrics | ""                            |
+| collect.replication_status                 | Collect replication status metrics                   | false                         |
+| collect.data_disk_usage                    | Collect disk usage per database                      | false                         |
+| collect.data_disk_usage.scrape_interval    | Collect interval of disk usage per database          | 30                            |
+| net.listen_address                         | Address to listen on for web interface and telemetry | 0.0.0.0:9105                  |
+| log.log_path                               | Log path                                             | "" (logs only to the console) |
+| log.level                                  | Log level (info, warn, error, fatal, panic)          | info                          |
+| debug.pprof                                | Enable pprof                                         | false                         |
 
 ## License
 

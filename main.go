@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"strings"
 	"time"
 
 	"singlestore_exporter/collector"
@@ -27,9 +28,13 @@ func main() {
 	flagSlowQueryPtr := flag.Bool("collect.slow_query", false, "collect slow query")
 	flagSlowQueryThresholdPtr := flag.Int("collect.slow_query.threshold", 10, "slow query threshold in seconds")
 	flagSlowQueryLogPathPtr := flag.String("collect.slow_query.log_path", "", "slow query log path")
+	flagSlowQueryExceptionHostsPtr := flag.String("collect.slow_query.exception.hosts", "", "slow query exception patterns host")
+	flagSlowQueryExceptionInfoPatternsPtr := flag.String("collect.slow_query.exception.info.patterns", "", "slow query exception patterns info")
 
 	flagDataDiskUsagePtr := flag.Bool("collect.data_disk_usage", false, "collect data disk usage")
 	flagDataDiskUsageScrapeIntervalPtr := flag.Int("collect.data_disk_usage.scrape_interval", 30, "data disk usage scrape interval in seconds")
+
+	flagActiveTransactionPtr := flag.Bool("collect.active_transaction", false, "collect active transaction")
 
 	flagLogPathPtr := flag.String("log.log_path", "", "singlestore_exporter log path")
 	flagLogLevel := flag.String("log.level", "info", "log level (default: info)")
@@ -38,6 +43,15 @@ func main() {
 	if *versionFlag {
 		fmt.Printf("singlestore_exporter version %s\n", Version)
 		return
+	}
+
+	slowQueryExceptionHosts := make([]string, 0)
+	if *flagSlowQueryExceptionHostsPtr != "" {
+		slowQueryExceptionHosts = strings.Split(*flagSlowQueryExceptionHostsPtr, ",")
+	}
+	slowQueryExceptionInfoPatterns := make([]string, 0)
+	if *flagSlowQueryExceptionInfoPatternsPtr != "" {
+		slowQueryExceptionInfoPatterns = strings.Split(*flagSlowQueryExceptionInfoPatternsPtr, ",")
 	}
 
 	if err := log.InitLoggers(*flagLogPathPtr, *flagLogLevel, *flagSlowQueryLogPathPtr); err != nil {
@@ -59,7 +73,23 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, newHandler(Version, dsn, *flagSlowQueryPtr, *flagSlowQueryThresholdPtr, *flagReplicationStatusPtr, *flagDataDiskUsagePtr)))
+	mux.Handle(
+		"/metrics",
+		promhttp.InstrumentMetricHandler(
+			prometheus.DefaultRegisterer,
+			newHandler(
+				Version,
+				dsn,
+				*flagSlowQueryPtr,
+				*flagSlowQueryThresholdPtr,
+				*flagReplicationStatusPtr,
+				*flagDataDiskUsagePtr,
+				*flagActiveTransactionPtr,
+				slowQueryExceptionHosts,
+				slowQueryExceptionInfoPatterns,
+			),
+		),
+	)
 
 	// pprof
 	if *flagPprof {
@@ -83,11 +113,26 @@ func newHandler(
 	flagSlowQueryThreshold int,
 	flagReplicationStatus bool,
 	flagDataDiskUsage bool,
+	flagActiveTransaction bool,
+	slowQueryExceptionHosts []string,
+	slowQueryExceptionInfoPatterns []string,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		registry := prometheus.NewRegistry()
 
-		registry.MustRegister(collector.New(version, dsn, flagSlowQuery, flagSlowQueryThreshold, flagReplicationStatus, flagDataDiskUsage))
+		registry.MustRegister(
+			collector.New(
+				version,
+				dsn,
+				flagSlowQuery,
+				flagSlowQueryThreshold,
+				flagReplicationStatus,
+				flagDataDiskUsage,
+				flagActiveTransaction,
+				slowQueryExceptionHosts,
+				slowQueryExceptionInfoPatterns,
+			),
+		)
 
 		gatherers := prometheus.Gatherers{
 			prometheus.DefaultGatherer,

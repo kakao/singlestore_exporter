@@ -11,8 +11,6 @@ import (
 )
 
 var systemUsers = map[string]bool{
-	"kadba":       true,
-	"kamon":       true,
 	"distributed": true,
 }
 
@@ -42,9 +40,7 @@ const (
 	process = "process"
 
 	// length of INFO is limited to 1000 characters to avoid memory overflow
-	infoSchemaProcessListQuery = `
-SELECT ID, USER, HOST, DB, COMMAND, TIME, STATE, LEFT(INFO, 1000) AS INFO, RPC_INFO, PLAN_ID, TRANSACTION_STATE, ROW_LOCKS_HELD, PARTITION_LOCKS_HELD, EPOCH, LWPID, RESOURCE_POOL, STMT_VERSION, REASON_FOR_QUEUEING,
-       DATE_SUB(now(), INTERVAL time SECOND) AS SUBMITTED_TIME
+	infoSchemaProcessListQuery = `SELECT ID, USER, HOST, DB, COMMAND, TIME, STATE, LEFT(INFO, 1000) AS INFO, RPC_INFO, PLAN_ID, TRANSACTION_STATE, ROW_LOCKS_HELD, PARTITION_LOCKS_HELD, EPOCH, LWPID, RESOURCE_POOL, STMT_VERSION, REASON_FOR_QUEUEING, DATE_SUB(now(), INTERVAL time SECOND) AS SUBMITTED_TIME
 FROM information_schema.PROCESSLIST`
 )
 
@@ -66,6 +62,27 @@ var (
 
 type ScrapeProcessList struct {
 	Threshold int
+	Query     string
+}
+
+func NewScrapeProcessList(threshold int, exceptionHosts []string, exceptionInfoPatterns []string) *ScrapeProcessList {
+	query := infoSchemaProcessListQuery
+	if len(exceptionHosts) != 0 || len(exceptionInfoPatterns) != 0 {
+		query += "\nWHERE "
+	}
+	for _, host := range exceptionHosts {
+		query += "HOST NOT LIKE '" + host + ":%' AND "
+	}
+	for _, pattern := range exceptionInfoPatterns {
+		query += "NVL(INFO, '') NOT LIKE '%" + pattern + "%' AND "
+	}
+	if len(exceptionHosts) != 0 || len(exceptionInfoPatterns) != 0 {
+		query = query[:len(query)-5]
+	}
+	return &ScrapeProcessList{
+		Threshold: threshold,
+		Query:     query,
+	}
 }
 
 func (s *ScrapeProcessList) Help() string {
@@ -78,12 +95,12 @@ func (s *ScrapeProcessList) Scrape(db *sqlx.DB, ch chan<- prometheus.Metric) {
 	}
 
 	processList := make([]Process, 0)
-	if err := db.Select(&processList, infoSchemaProcessListQuery); err != nil {
-		log.ErrorLogger.Errorf("scraping query failed: query=%s error=%v", infoSchemaProcessListQuery, err)
+	if err := db.Select(&processList, s.Query); err != nil {
+		log.ErrorLogger.Errorf("scraping query failed: query=%s error=%v", s.Query, err)
 		return
 	}
 
-	max := make(map[string]int)
+	maxTime := make(map[string]int)
 	counter := make(map[string]int)
 	for _, process := range processList {
 		if _, exists := systemUsers[process.User]; exists {
@@ -94,10 +111,10 @@ func (s *ScrapeProcessList) Scrape(db *sqlx.DB, ch chan<- prometheus.Metric) {
 			continue
 		}
 
-		if m, exists := max[process.User]; !exists {
-			max[process.User] = process.Time
+		if m, exists := maxTime[process.User]; !exists {
+			maxTime[process.User] = process.Time
 		} else if process.Time > m {
-			max[process.User] = process.Time
+			maxTime[process.User] = process.Time
 		}
 
 		counter[process.User]++
@@ -116,7 +133,7 @@ func (s *ScrapeProcessList) Scrape(db *sqlx.DB, ch chan<- prometheus.Metric) {
 		}).Info("slow query detected")
 	}
 
-	for user, maxTime := range max {
+	for user, maxTime := range maxTime {
 		ch <- prometheus.MustNewConstMetric(
 			processListTimeMaxDesc, prometheus.GaugeValue, float64(maxTime),
 			user,

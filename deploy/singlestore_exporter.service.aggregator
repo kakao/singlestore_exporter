@@ -14,6 +14,9 @@ ExecStart=/opt/exporters/bin/singlestore_exporter \
   --collect.slow_query=true \
   --collect.slow_query.threshold=10 \
   --collect.slow_query.log_path=/opt/exporters/logs/singlestore_exporter_slow_query.log \
+  --collect.slow_query.exception.hosts=localhost \
+  --collect.slow_query.exception.info.patterns=FOREGROUND \
+  --collect.active_transaction=true \
   --collect.replication_status=false
 
 [Install]

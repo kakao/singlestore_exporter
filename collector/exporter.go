@@ -45,6 +45,9 @@ func New(
 	flagSlowQueryThreshold int,
 	flagReplicationStatus bool,
 	flagDataDiskUsage bool,
+	flagActiveTransactionPtr bool,
+	slowQueryExceptionHosts []string,
+	slowQueryExceptionInfoPatterns []string,
 ) *Exporter {
 	scrapers := []Scraper{
 		&ScrapeNodes{},
@@ -54,10 +57,13 @@ func New(
 			&ScrapeCachedBlobs{},
 		)
 		if flagSlowQuery {
-			scrapers = append(scrapers, &ScrapeProcessList{Threshold: flagSlowQueryThreshold})
+			scrapers = append(scrapers, NewScrapeProcessList(flagSlowQueryThreshold, slowQueryExceptionHosts, slowQueryExceptionInfoPatterns))
 		}
 		if flagReplicationStatus {
 			scrapers = append(scrapers, &ScrapeReplicationStatus{})
+		}
+		if flagActiveTransactionPtr {
+			scrapers = append(scrapers, &ScrapeActiveTransactions{})
 		}
 	}
 	if flagDataDiskUsage {
