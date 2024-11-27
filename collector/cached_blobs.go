@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"singlestore_exporter/log"
 
 	"github.com/jmoiron/sqlx"
@@ -47,13 +48,13 @@ func (s *ScrapeCachedBlobs) Help() string {
 	return "Collect metrics from information_schema.MV_CACHED_BLOBS"
 }
 
-func (s *ScrapeCachedBlobs) Scrape(db *sqlx.DB, ch chan<- prometheus.Metric) {
+func (s *ScrapeCachedBlobs) Scrape(ctx context.Context, db *sqlx.DB, ch chan<- prometheus.Metric) {
 	if db == nil {
 		return
 	}
 
 	rows := make([]CachedBlobs, 0)
-	if err := db.Select(&rows, infoSchemaCachedBlobQuery); err != nil {
+	if err := db.SelectContext(ctx, &rows, infoSchemaCachedBlobQuery); err != nil {
 		log.ErrorLogger.Errorf("scraping query failed: query=%s error=%v", infoSchemaCachedBlobQuery, err)
 		return
 	}

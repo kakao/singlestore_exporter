@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -33,21 +34,27 @@ var (
 )
 
 type Exporter struct {
+	ctx      context.Context
 	version  string
 	dsn      string
 	scrapers []Scraper
 }
 
+type ExporterFlags struct {
+	FlagSlowQuery                      bool
+	FlagSlowQueryThreshold             int
+	FlagReplicationStatus              bool
+	FlagDataDiskUsage                  bool
+	FlagActiveTransactionPtr           bool
+	FlagSlowQueryExceptionHosts        []string
+	FlagSlowQueryExceptionInfoPatterns []string
+}
+
 func New(
+	ctx context.Context,
 	version string,
 	dsn string,
-	flagSlowQuery bool,
-	flagSlowQueryThreshold int,
-	flagReplicationStatus bool,
-	flagDataDiskUsage bool,
-	flagActiveTransactionPtr bool,
-	slowQueryExceptionHosts []string,
-	slowQueryExceptionInfoPatterns []string,
+	flags *ExporterFlags,
 ) *Exporter {
 	scrapers := []Scraper{
 		&ScrapeNodes{},
@@ -55,22 +62,24 @@ func New(
 	if dsn != "" {
 		scrapers = append(scrapers,
 			&ScrapeCachedBlobs{},
+			&ScrapePipeline{},
 		)
-		if flagSlowQuery {
-			scrapers = append(scrapers, NewScrapeProcessList(flagSlowQueryThreshold, slowQueryExceptionHosts, slowQueryExceptionInfoPatterns))
+		if flags.FlagSlowQuery {
+			scrapers = append(scrapers, NewScrapeProcessList(flags.FlagSlowQueryThreshold, flags.FlagSlowQueryExceptionHosts, flags.FlagSlowQueryExceptionInfoPatterns))
 		}
-		if flagReplicationStatus {
+		if flags.FlagReplicationStatus {
 			scrapers = append(scrapers, &ScrapeReplicationStatus{})
 		}
-		if flagActiveTransactionPtr {
+		if flags.FlagActiveTransactionPtr {
 			scrapers = append(scrapers, &ScrapeActiveTransactions{})
 		}
 	}
-	if flagDataDiskUsage {
+	if flags.FlagDataDiskUsage {
 		scrapers = append(scrapers, &ScrapeDataDiskUsage{})
 	}
 
 	return &Exporter{
+		ctx,
 		version,
 		dsn,
 		scrapers,
@@ -114,7 +123,7 @@ func (e *Exporter) scrape(dsn string, ch chan<- prometheus.Metric) {
 		wg.Add(1)
 		go func(scraper Scraper) {
 			defer wg.Done()
-			scraper.Scrape(db, ch)
+			scraper.Scrape(e.ctx, db, ch)
 		}(scraper)
 	}
 }

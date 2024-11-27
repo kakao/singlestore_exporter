@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
@@ -89,13 +90,13 @@ func (s *ScrapeProcessList) Help() string {
 	return "Collect metrics from information_schema.PROCESSLIST"
 }
 
-func (s *ScrapeProcessList) Scrape(db *sqlx.DB, ch chan<- prometheus.Metric) {
+func (s *ScrapeProcessList) Scrape(ctx context.Context, db *sqlx.DB, ch chan<- prometheus.Metric) {
 	if db == nil {
 		return
 	}
 
 	processList := make([]Process, 0)
-	if err := db.Select(&processList, s.Query); err != nil {
+	if err := db.SelectContext(ctx, &processList, s.Query); err != nil {
 		log.ErrorLogger.Errorf("scraping query failed: query=%s error=%v", s.Query, err)
 		return
 	}

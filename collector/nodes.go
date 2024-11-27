@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"encoding/json"
 	"os/exec"
 	"strconv"
@@ -46,7 +47,7 @@ func (s *ScrapeNodes) Help() string {
 	return "Collect node state by memsqlctl"
 }
 
-func (s *ScrapeNodes) Scrape(db *sqlx.DB, ch chan<- prometheus.Metric) {
+func (s *ScrapeNodes) Scrape(ctx context.Context, db *sqlx.DB, ch chan<- prometheus.Metric) {
 	errorMetric := func() {
 		ch <- prometheus.MustNewConstMetric(
 			nodeStateDesc, prometheus.GaugeValue, float64(0),
@@ -60,7 +61,7 @@ func (s *ScrapeNodes) Scrape(db *sqlx.DB, ch chan<- prometheus.Metric) {
 		)
 	}
 
-	out, err := exec.Command("/usr/bin/memsqlctl", "list-nodes", "--json", "--yes").Output()
+	out, err := exec.CommandContext(ctx, "/usr/bin/memsqlctl", "list-nodes", "--json", "--yes").Output()
 	if err != nil {
 		log.ErrorLogger.Errorf("scraping command failed: command='/usr/bin/memsqlctl list-nodes --json --yes' error=%v", err)
 		errorMetric()

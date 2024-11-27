@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/jmoiron/sqlx"
 	"github.com/prometheus/client_golang/prometheus"
@@ -48,45 +49,50 @@ var (
 )
 
 func ScrapeDataDiskUsages() {
-	dataDiskUsagesMu.Lock()
-	defer dataDiskUsagesMu.Unlock()
+	var totalRows []DataDiskUsage
+	var err error
+
+	defer func() {
+		dataDiskUsagesMu.Lock()
+		defer dataDiskUsagesMu.Unlock()
+
+		if err != nil {
+			dataDiskUsages = nil
+		} else {
+			dataDiskUsages = totalRows
+		}
+	}()
 
 	// get memsql nodes first
-	out, err := exec.Command("/usr/bin/memsqlctl", "list-nodes", "--json").Output()
+	var out []byte
+	out, err = exec.Command("/usr/bin/memsqlctl", "list-nodes", "--json").Output()
 	if err != nil {
 		log.ErrorLogger.Errorf("scraping command failed: command='memsqlctl list-nodes --json' out=%s error=%v", string(out), err)
-		dataDiskUsages = nil
 		return
 	}
 
 	var memsqlNodes MemsqlNodes
-	if err := json.Unmarshal(out, &memsqlNodes); err != nil {
+	if err = json.Unmarshal(out, &memsqlNodes); err != nil {
 		log.ErrorLogger.Errorf("unmarshal output failed: command='memsqlctl list-nodes --json' out=%s error=%v", string(out), err)
-		dataDiskUsages = nil
 		return
 	}
 
 	// get data disk usage per node
-	totalRows := make([]DataDiskUsage, 0)
 	for _, node := range memsqlNodes.Nodes {
 		out, err = exec.Command("/usr/bin/memsqlctl", "query", "--memsql-id", node.MemsqlId, "--sql", infoSchemaDataDiskUsageQuery, "--json").Output()
 		if err != nil {
 			log.ErrorLogger.Errorf("scraping command failed: command='memsqlctl query --sql '%s' --json' out=%s error=%v", infoSchemaDataDiskUsageQuery, string(out), err)
-			dataDiskUsages = nil
 			return
 		}
 
 		var rows DataDiskUsageRows
-		if err := json.Unmarshal(out, &rows); err != nil {
+		if err = json.Unmarshal(out, &rows); err != nil {
 			log.ErrorLogger.Errorf("unmarshal output failed: command='memsqlctl query --sql '%s' --json' out=%s error=%v", infoSchemaDataDiskUsageQuery, string(out), err)
-			dataDiskUsages = nil
 			return
 		}
 
 		totalRows = append(totalRows, rows.Rows...)
 	}
-
-	dataDiskUsages = totalRows
 }
 
 const (
@@ -138,7 +144,7 @@ func (s *ScrapeDataDiskUsage) Help() string {
 	return "Collect data disk usage by memsqlctl"
 }
 
-func (s *ScrapeDataDiskUsage) Scrape(db *sqlx.DB, ch chan<- prometheus.Metric) {
+func (s *ScrapeDataDiskUsage) Scrape(ctx context.Context, db *sqlx.DB, ch chan<- prometheus.Metric) {
 	if dataDiskUsages == nil {
 		return
 	}

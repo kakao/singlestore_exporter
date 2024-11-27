@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -72,6 +74,16 @@ func main() {
 		}()
 	}
 
+	flags := &collector.ExporterFlags{
+		FlagSlowQuery:                      *flagSlowQueryPtr,
+		FlagSlowQueryThreshold:             *flagSlowQueryThresholdPtr,
+		FlagReplicationStatus:              *flagReplicationStatusPtr,
+		FlagDataDiskUsage:                  *flagDataDiskUsagePtr,
+		FlagActiveTransactionPtr:           *flagActiveTransactionPtr,
+		FlagSlowQueryExceptionHosts:        slowQueryExceptionHosts,
+		FlagSlowQueryExceptionInfoPatterns: slowQueryExceptionInfoPatterns,
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle(
 		"/metrics",
@@ -80,13 +92,7 @@ func main() {
 			newHandler(
 				Version,
 				dsn,
-				*flagSlowQueryPtr,
-				*flagSlowQueryThresholdPtr,
-				*flagReplicationStatusPtr,
-				*flagDataDiskUsagePtr,
-				*flagActiveTransactionPtr,
-				slowQueryExceptionHosts,
-				slowQueryExceptionInfoPatterns,
+				flags,
 			),
 		),
 	)
@@ -109,28 +115,28 @@ func main() {
 func newHandler(
 	version string,
 	dsn string,
-	flagSlowQuery bool,
-	flagSlowQueryThreshold int,
-	flagReplicationStatus bool,
-	flagDataDiskUsage bool,
-	flagActiveTransaction bool,
-	slowQueryExceptionHosts []string,
-	slowQueryExceptionInfoPatterns []string,
+	flags *collector.ExporterFlags,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		registry := prometheus.NewRegistry()
 
+		ctx := r.Context()
+		timeoutSeconds, err := getScrapeTimeoutSeconds(r)
+		if err != nil {
+			log.ErrorLogger.Infof("Error getting timeout from Prometheus header: err=%v", err)
+		} else if timeoutSeconds > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, time.Duration(timeoutSeconds*float64(time.Second)))
+			defer cancel()
+			r = r.WithContext(ctx)
+		}
+
 		registry.MustRegister(
 			collector.New(
+				ctx,
 				version,
 				dsn,
-				flagSlowQuery,
-				flagSlowQueryThreshold,
-				flagReplicationStatus,
-				flagDataDiskUsage,
-				flagActiveTransaction,
-				slowQueryExceptionHosts,
-				slowQueryExceptionInfoPatterns,
+				flags,
 			),
 		)
 
@@ -142,4 +148,20 @@ func newHandler(
 		h := promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{})
 		h.ServeHTTP(w, r)
 	}
+}
+
+// {"level":"info","msg":"Headers: map[Accept:[text/plain;version=0.0.4;q=1,*/*;q=0.1] Accept-Encoding:[gzip] User-Agent:[vm_promscrape] X-Prometheus-Scrape-Timeout-Seconds:[5.000]]","time":"2024-10-31T10:42:53+09:00"}
+func getScrapeTimeoutSeconds(r *http.Request) (float64, error) {
+	var timeoutSeconds float64
+	if v := r.Header.Get("X-Prometheus-Scrape-Timeout-Seconds"); v != "" {
+		var err error
+		timeoutSeconds, err = strconv.ParseFloat(v, 64)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse timeout from Prometheus header: key=X-Prometheus-Scrape-Timeout-Seconds v=%s err=%v", v, err)
+		}
+	}
+	if timeoutSeconds < 0 {
+		return 0, fmt.Errorf("timeout value from Prometheus header is invalid: %f", timeoutSeconds)
+	}
+	return timeoutSeconds, nil
 }

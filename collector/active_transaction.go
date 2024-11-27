@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"github.com/jmoiron/sqlx"
 	"github.com/prometheus/client_golang/prometheus"
 	"singlestore_exporter/log"
@@ -66,13 +67,13 @@ func (s *ScrapeActiveTransactions) Help() string {
 	return "Collect active transactions"
 }
 
-func (s *ScrapeActiveTransactions) Scrape(db *sqlx.DB, ch chan<- prometheus.Metric) {
+func (s *ScrapeActiveTransactions) Scrape(ctx context.Context, db *sqlx.DB, ch chan<- prometheus.Metric) {
 	if db == nil {
 		return
 	}
 
 	views := make([]ActiveDistributedTransactionsView, 0)
-	if err := db.Select(&views, infoSchemaActiveDistributedTransactionsViewExistsQuery); err != nil {
+	if err := db.SelectContext(ctx, &views, infoSchemaActiveDistributedTransactionsViewExistsQuery); err != nil {
 		log.ErrorLogger.Errorf("checking existence view query failed: query=%s error=%v", infoSchemaActiveDistributedTransactionsViewExistsQuery, err)
 	} else if len(views) == 0 {
 		return

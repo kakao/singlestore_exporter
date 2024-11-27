@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"database/sql"
 	"strconv"
 
@@ -50,13 +51,13 @@ func (s *ScrapeReplicationStatus) Help() string {
 	return "Collect metrics from information_schema.MV_REPLICATION_STATUS"
 }
 
-func (s *ScrapeReplicationStatus) Scrape(db *sqlx.DB, ch chan<- prometheus.Metric) {
+func (s *ScrapeReplicationStatus) Scrape(ctx context.Context, db *sqlx.DB, ch chan<- prometheus.Metric) {
 	if db == nil {
 		return
 	}
 
 	rows := make([]ReplicationStatus, 0)
-	if err := db.Select(&rows, infoSchemaReplicationStatusQuery); err != nil {
+	if err := db.SelectContext(ctx, &rows, infoSchemaReplicationStatusQuery); err != nil {
 		log.ErrorLogger.Errorf("scraping query failed: query=%s error=%v", infoSchemaReplicationStatusQuery, err)
 		return
 	}
